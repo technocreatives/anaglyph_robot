@@ -1,0 +1,12 @@
+[package]
+name = "anaglyph_robot"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.82"
+clap = { version = "4.5.4", features = ["derive"] }
+glium = "0.34.0"
+jpeg-decoder = "0.3.1"
+v4l = "0.14.0"
+winit = "0.29.15"
