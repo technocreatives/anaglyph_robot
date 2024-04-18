@@ -20,6 +20,8 @@ struct Cli {
     camera1: String,
     #[clap(default_value = "/dev/video2")]
     camera2: String,
+    #[clap(long)]
+    flip_x: bool,
 }
 
 type ImageBuffer = Arc<RwLock<Vec<u8>>>;
@@ -79,27 +81,34 @@ fn main() -> anyhow::Result<()> {
     // compiling shaders and linking them together
     let program = program!(&display,
         140 => {
-            vertex: "
+            vertex: &format!("
                 #version 140
                 uniform mat4 matrix;
                 in vec2 position;
                 in vec2 tex_coords;
                 out vec2 v_tex_coords;
-                void main() {
+                void main() {{
                     gl_Position = matrix * vec4(position, 0.0, 1.0);
                     v_tex_coords = tex_coords;
-                }
-            ",
+                }}
+            "),
 
-            fragment: "
+            fragment: &format!("
                 #version 140
                 uniform sampler2D tex;
                 in vec2 v_tex_coords;
                 out vec4 f_color;
-                void main() {
-                    f_color = texture(tex, v_tex_coords);
-                }
-            "
+
+                void main() {{
+                    vec2 new_tex_coords = v_tex_coords;
+                    {flip}
+                    f_color = texture(tex, new_tex_coords);
+                }}
+            ", flip=if args.flip_x {
+                "new_tex_coords.x = 1.0 - new_tex_coords.x;"
+            } else {
+                ""
+            }),
         },
     )
     .unwrap();
