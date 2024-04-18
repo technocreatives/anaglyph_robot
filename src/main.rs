@@ -1,3 +1,4 @@
+use anyhow::Context;
 use clap::Parser;
 use glium::{implement_vertex, index::PrimitiveType, program, uniform, Surface};
 use jpeg_decoder as jpeg;
@@ -20,12 +21,20 @@ struct Cli {
     camera1: String,
     #[clap(long)]
     camera1_flip_y: bool,
+
     #[clap(default_value = "/dev/video2")]
     camera2: String,
     #[clap(long)]
     camera2_flip_y: bool,
+
     #[clap(long)]
     flip_x: bool,
+
+    #[clap(long, default_value_t = 1280)]
+    width: u32,
+
+    #[clap(long, default_value_t = 720)]
+    height: u32,
 }
 
 type ImageBuffer = Arc<RwLock<Vec<u8>>>;
@@ -33,8 +42,8 @@ type ImageBuffer = Arc<RwLock<Vec<u8>>>;
 fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
 
-    let (raw_image1, format1) = cam(&args.camera1)?;
-    let (raw_image2, format2) = cam(&args.camera2)?;
+    let (raw_image1, format1) = cam(&args.camera1, args.width, args.height)?;
+    let (raw_image2, format2) = cam(&args.camera2, args.width, args.height)?;
 
     // Setup the GL display stuff
     let event_loop = winit::event_loop::EventLoop::new()?;
@@ -246,7 +255,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn cam(path: &str) -> anyhow::Result<(ImageBuffer, Format)> {
+fn cam(path: &str, width: u32, height: u32) -> anyhow::Result<(ImageBuffer, Format)> {
     println!("Using device: {}\n", path);
 
     // Allocate 4 buffers by default
@@ -258,6 +267,23 @@ fn cam(path: &str) -> anyhow::Result<(ImageBuffer, Format)> {
     let dev = RwLock::new(Device::with_path(path)?);
     {
         let dev = dev.write().unwrap();
+
+        // let formats = dev
+        //     .enum_formats()
+        //     .unwrap()
+        //     .iter()
+        //     .flat_map(|f| dev.enum_framesizes(f.fourcc).unwrap())
+        //     .collect::<Vec<_>>();
+        // if let Some(format) = formats.iter().find(|x| match x.size {
+        //     FrameSizeEnum::Discrete(Discrete { width, height }) => width == wanted_width,
+        //     FrameSizeEnum::Stepwise(_) => false,
+        // }) {
+        //
+        // }
+
+        dev.set_format(&Format::new(width, height, FourCC::new(b"MJPG")))
+            .context("Couldn't set format")?;
+
         format = dev.format()?;
         params = dev.params()?;
 
