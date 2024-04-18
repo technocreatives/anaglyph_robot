@@ -1,0 +1,4 @@
+#! /bin/bash
+
+cargo run --release -- --camera1-flip-y --flip-x /dev/video2 /dev/video0
+
