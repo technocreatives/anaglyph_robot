@@ -18,8 +18,12 @@ use v4l::{
 struct Cli {
     #[clap(default_value = "/dev/video0")]
     camera1: String,
+    #[clap(long)]
+    camera1_flip_y: bool,
     #[clap(default_value = "/dev/video2")]
     camera2: String,
+    #[clap(long)]
+    camera2_flip_y: bool,
     #[clap(long)]
     flip_x: bool,
 }
@@ -78,10 +82,9 @@ fn main() -> anyhow::Result<()> {
     let index_buffer =
         glium::IndexBuffer::new(&display, PrimitiveType::TriangleStrip, &[1u16, 2, 0, 3]).unwrap();
 
-    // compiling shaders and linking them together
-    let program = program!(&display,
+    let program_camera1 = program!(&display,
         140 => {
-            vertex: &format!("
+            vertex: "
                 #version 140
                 uniform mat4 matrix;
                 in vec2 position;
@@ -91,7 +94,7 @@ fn main() -> anyhow::Result<()> {
                     gl_Position = matrix * vec4(position, 0.0, 1.0);
                     v_tex_coords = tex_coords;
                 }}
-            "),
+            ",
 
             fragment: &format!("
                 #version 140
@@ -101,11 +104,57 @@ fn main() -> anyhow::Result<()> {
 
                 void main() {{
                     vec2 new_tex_coords = v_tex_coords;
-                    {flip}
+                    {flip_y}
+                    {flip_x}
                     f_color = texture(tex, new_tex_coords);
                 }}
-            ", flip=if args.flip_x {
+            ", flip_x=if args.flip_x {
                 "new_tex_coords.x = 1.0 - new_tex_coords.x;"
+            } else {
+                ""
+            }, flip_y=if args.camera1_flip_y {
+                "new_tex_coords.y = 1.0 - new_tex_coords.y;
+                new_tex_coords.x = 1.0 - new_tex_coords.x;"
+            } else {
+                ""
+            }),
+        },
+    )
+    .unwrap();
+
+    let program_camera2 = program!(&display,
+        140 => {
+            vertex: "
+                #version 140
+                uniform mat4 matrix;
+                in vec2 position;
+                in vec2 tex_coords;
+                out vec2 v_tex_coords;
+                void main() {
+                    gl_Position = matrix * vec4(position, 0.0, 1.0);
+                    v_tex_coords = tex_coords;
+                }
+            ",
+
+            fragment: &format!("
+                #version 140
+                uniform sampler2D tex;
+                in vec2 v_tex_coords;
+                out vec4 f_color;
+
+                void main() {{
+                    vec2 new_tex_coords = v_tex_coords;
+                    {flip_y}
+                    {flip_x}
+                    f_color = texture(tex, new_tex_coords);
+                }}
+            ", flip_x=if args.flip_x {
+                "new_tex_coords.x = 1.0 - new_tex_coords.x;"
+            } else {
+                ""
+            }, flip_y=if args.camera2_flip_y {
+                "new_tex_coords.y = 1.0 - new_tex_coords.y;
+                new_tex_coords.x = 1.0 - new_tex_coords.x;"
             } else {
                 ""
             }),
@@ -148,7 +197,7 @@ fn main() -> anyhow::Result<()> {
                 .draw(
                     &vertex_buffer,
                     &index_buffer,
-                    &program,
+                    &program_camera1,
                     &uniforms,
                     &glium::DrawParameters {
                         blend: glium::Blend::alpha_blending(),
@@ -164,7 +213,7 @@ fn main() -> anyhow::Result<()> {
                 .draw(
                     &vertex_buffer,
                     &index_buffer,
-                    &program,
+                    &program_camera2,
                     &uniforms,
                     &glium::DrawParameters {
                         blend: glium::Blend::alpha_blending(),
