@@ -45,7 +45,6 @@ fn main() -> anyhow::Result<()> {
     let (raw_image1, format1) = cam(&args.camera1, args.width, args.height)?;
     let (raw_image2, format2) = cam(&args.camera2, args.width, args.height)?;
 
-    // Setup the GL display stuff
     let event_loop = winit::event_loop::EventLoop::new()?;
     let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new().build(&event_loop);
     window.request_redraw();
@@ -53,7 +52,9 @@ fn main() -> anyhow::Result<()> {
     window.focus_window();
     event_loop.set_control_flow(winit::event_loop::ControlFlow::Poll);
 
-    // building the vertex buffer, which contains all the vertices that we will draw
+    // the following OpenGL code is inspired by
+    // <https://github.com/raymanfx/libv4l-rs/blob/ced9df0bb2ab3c1b03783536fceb209a630d23c8/examples/glium.rs>
+    // which is licensed under the MIT license
     let vertex_buffer = {
         #[derive(Copy, Clone)]
         struct Vertex {
@@ -87,7 +88,6 @@ fn main() -> anyhow::Result<()> {
         .unwrap()
     };
 
-    // building the index buffer
     let index_buffer =
         glium::IndexBuffer::new(&display, PrimitiveType::TriangleStrip, &[1u16, 2, 0, 3]).unwrap();
 
@@ -188,7 +188,6 @@ fn main() -> anyhow::Result<()> {
                 (format.width, format.height),
             );
             let opengl_texture = glium::texture::Texture2d::new(&display, image).unwrap();
-            // building the uniforms
             let uniforms = uniform! {
                 matrix: [
                     [1.0, 0.0, 0.0, 0.0],
@@ -237,7 +236,6 @@ fn main() -> anyhow::Result<()> {
 
         target.finish().unwrap();
 
-        // polling and handling the events received by the window
         if let winit::event::Event::WindowEvent {
             event: winit::event::WindowEvent::CloseRequested,
             ..
@@ -275,7 +273,7 @@ fn cam(path: &str, width: u32, height: u32) -> anyhow::Result<(ImageBuffer, Form
 
         println!("Active format:\n{}", format);
         println!("Active parameters:\n{}", params);
-   }
+    }
 
     let buffer = Arc::new(RwLock::new(Vec::new()));
 
@@ -283,8 +281,6 @@ fn cam(path: &str, width: u32, height: u32) -> anyhow::Result<(ImageBuffer, Form
         let buffer = Arc::clone(&buffer);
         move || {
             let dev = dev.write().unwrap();
-
-            // Setup a buffer stream
             let mut stream =
                 MmapStream::with_buffers(&dev, Type::VideoCapture, buffer_count).unwrap();
 
@@ -293,11 +289,19 @@ fn cam(path: &str, width: u32, height: u32) -> anyhow::Result<(ImageBuffer, Form
                 let data = match &format.fourcc.repr {
                     b"RGB3" => buf.to_vec(),
                     b"MJPG" => {
-                        // Decode the JPEG frame to RGB
                         let mut decoder = jpeg::Decoder::new(buf);
-                        decoder.decode().expect("failed to decode JPEG")
+                        match decoder.decode() {
+                            Ok(data) => data,
+                            Err(error) => {
+                                eprintln!("failed to decode JPEG: {error}");
+                                continue;
+                            }
+                        }
                     }
-                    _ => panic!("invalid buffer pixelformat"),
+                    _ => {
+                        eprintln!("invalid buffer pixelformat");
+                        continue;
+                    }
                 };
                 *buffer.write().unwrap() = data;
             }
