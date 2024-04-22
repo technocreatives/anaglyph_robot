@@ -258,28 +258,14 @@ fn main() -> anyhow::Result<()> {
 fn cam(path: &str, width: u32, height: u32) -> anyhow::Result<(ImageBuffer, Format)> {
     println!("Using device: {}\n", path);
 
-    // Allocate 4 buffers by default
     let buffer_count = 2;
 
-    let mut format: Format;
+    let format: Format;
     let params: Parameters;
 
     let dev = RwLock::new(Device::with_path(path)?);
     {
         let dev = dev.write().unwrap();
-
-        // let formats = dev
-        //     .enum_formats()
-        //     .unwrap()
-        //     .iter()
-        //     .flat_map(|f| dev.enum_framesizes(f.fourcc).unwrap())
-        //     .collect::<Vec<_>>();
-        // if let Some(format) = formats.iter().find(|x| match x.size {
-        //     FrameSizeEnum::Discrete(Discrete { width, height }) => width == wanted_width,
-        //     FrameSizeEnum::Stepwise(_) => false,
-        // }) {
-        //
-        // }
 
         dev.set_format(&Format::new(width, height, FourCC::new(b"MJPG")))
             .context("Couldn't set format")?;
@@ -287,25 +273,9 @@ fn cam(path: &str, width: u32, height: u32) -> anyhow::Result<(ImageBuffer, Form
         format = dev.format()?;
         params = dev.params()?;
 
-        // try RGB3 first
-        format.fourcc = FourCC::new(b"RGB3");
-        format = dev.set_format(&format)?;
-
-        if format.fourcc != FourCC::new(b"RGB3") {
-            // fallback to Motion-JPEG
-            format.fourcc = FourCC::new(b"MJPG");
-            format = dev.set_format(&format)?;
-
-            if format.fourcc != FourCC::new(b"MJPG") {
-                anyhow::bail!(
-                    "neither RGB3 nor MJPG supported by the device, but required by this example!"
-                );
-            }
-        }
-    }
-
-    println!("Active format:\n{}", format);
-    println!("Active parameters:\n{}", params);
+        println!("Active format:\n{}", format);
+        println!("Active parameters:\n{}", params);
+   }
 
     let buffer = Arc::new(RwLock::new(Vec::new()));
 
